@@ -10,34 +10,35 @@ import (
 )
 
 type Stream struct {
+	SrcIP    net.IP
 	SrcPort  string
 	DestIP   net.IP
 	DestPort string
 	Protocol string
 }
 
-func New(destIP string, srcPort string, destPort string, protocol string) *Stream {
-	ip := net.ParseIP(destIP)
-	stream := &Stream{DestIP: ip, SrcPort: srcPort, DestPort: destPort, Protocol: protocol}
+func New(srcIPRaw, destIPRaw, srcPort, destPort, protocol string) *Stream {
+	srcIP := net.ParseIP(srcIPRaw)
+	destIP := net.ParseIP(destIPRaw)
+	stream := &Stream{SrcIP: srcIP, DestIP: destIP, SrcPort: srcPort, DestPort: destPort, Protocol: protocol}
 	return stream
 }
 
 func (s *Stream) Start() {
+	srcChan := make(chan []byte)
+	destChan := make(chan []byte)
+
 	switch s.Protocol {
 	case "udp":
-		bus := make(chan []byte)
-		go listener.UDPListener(bus, s.SrcPort)
-		go dialer.Dialer(bus, "udp", s.DestIP.String(), s.SrcPort)
+		// go listener.UDPListener(bus, s.SrcPort)
+		// go dialer.Dialer(bus, "udp", s.DestIP.String(), s.SrcPort)
 	case "tcp":
-		bus := make(chan []byte)
-		go listener.TCPListener(bus, s.SrcPort)
-		// go dialer.Dialer(bus, "tcp", s.DestIP.String(), s.DestPort)
-		for elem := range bus {
-			fmt.Println("Data: ", string(elem))
-		}
+		go listener.TCPListener(srcChan, destChan, s.SrcIP.String(), s.SrcPort)
+		go dialer.Dialer(srcChan, destChan, "tcp", s.DestIP.String(), s.DestPort)
+		// for elem := range bus {
+		// 	fmt.Println("Data: ", string(elem))
+		// }
 	default:
-		// difference between panic and log.Fatal
-		// panic(fmt.Errorf("bad network protocol"))
 		log.Fatal(fmt.Errorf("bad network protocol"))
 	}
 }

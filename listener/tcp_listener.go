@@ -8,8 +8,8 @@ import (
 	"net"
 )
 
-func TCPListener(bus chan []byte, port string) {
-	l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%s", port))
+func TCPListener(srcChan, destChan chan []byte, ip, port string) {
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%s", ip, port))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -20,15 +20,23 @@ func TCPListener(bus chan []byte, port string) {
 		conn, err := l.Accept()
 		if err != nil {
 			log.Fatal(err)
-			close(bus)
-			break // return
 		}
+
 		fmt.Printf("new conn: %+v\n", conn)
-		go tcpHandler(bus, conn)
+		// go outboundHandler(destChan, conn)
+		go inboundHandler(srcChan, conn)
 	}
 }
 
-func tcpHandler(bus chan []byte, conn net.Conn) {
+func outboundHandler(destChan chan []byte, conn net.Conn) {
+	for range destChan {
+		if _, err := conn.Write(<-destChan); err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func inboundHandler(srcChan chan []byte, conn net.Conn) {
 	r := bufio.NewReader(conn)
 	for {
 		bytes := make([]byte, 4096)
@@ -37,13 +45,13 @@ func tcpHandler(bus chan []byte, conn net.Conn) {
 		case nil:
 		case io.EOF:
 			fmt.Println("EOF", err)
-			conn.Close()
-			return
+			// conn.Close()
+			// return
 		default:
 			fmt.Println("ERROR", err)
 			conn.Close()
 			return
 		}
-		bus <- bytes
+		srcChan <- bytes
 	}
 }
