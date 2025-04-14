@@ -2,6 +2,7 @@ package stream
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 
@@ -25,17 +26,64 @@ func New(srcIPRaw, destIPRaw, srcPort, destPort, protocol string) *Stream {
 }
 
 func (s *Stream) Start() {
-	srcChan := make(chan []byte)
-	destChan := make(chan []byte)
-
 	switch s.Protocol {
 	case "udp":
-		// go listener.UDPListener(bus, s.SrcPort)
-		// go dialer.Dialer(bus, "udp", s.DestIP.String(), s.SrcPort)
+		l, err := listener.New(s.Protocol, s.SrcPort)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Started UDP Listener\n")
+
+		d, err := dialer.New(s.Protocol, s.DestIP.String(), s.DestPort)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Started Dialer\n")
+
+		go startUDPStream(l, d)
 	case "tcp":
-		go listener.TCPListener(srcChan, destChan, s.SrcIP.String(), s.SrcPort)
-		go dialer.Dialer(srcChan, destChan, "tcp", s.DestIP.String(), s.DestPort)
+		l, err := listener.New(s.Protocol, s.SrcPort)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Started TCP Listener\n")
+
+		d, err := dialer.New(s.Protocol, s.DestIP.String(), s.DestPort)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Started Dialer\n")
+
+		go startTCPStream(l, d)
 	default:
 		log.Fatal(fmt.Errorf("bad network protocol"))
 	}
+}
+
+func startTCPStream(l *listener.Listener, d *dialer.Dialer) {
+	defer l.Conn.Close()
+	defer d.Conn.Close()
+
+	// l.Run()
+
+	fmt.Printf("TCP Stream Running\n")
+	go func() {
+		io.Copy(d.Writer, l.Reader)
+		d.Writer.Flush()
+	}()
+	io.Copy(l.Writer, d.Reader)
+	l.Writer.Flush()
+}
+
+func startUDPStream(l *listener.Listener, d *dialer.Dialer) {
+	defer l.Conn.Close()
+	defer d.Conn.Close()
+
+	fmt.Printf("UDP Stream Running\n")
+	go func() {
+		io.Copy(d.Writer, l.Reader)
+		d.Writer.Flush()
+	}()
+	io.Copy(l.Writer, d.Reader)
+	l.Writer.Flush()
 }
