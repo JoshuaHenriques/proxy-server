@@ -9,7 +9,7 @@ import (
 )
 
 func TCPListener(srcChan, destChan chan []byte, ip, port string) {
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%s", ip, port))
+	l, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -23,35 +23,43 @@ func TCPListener(srcChan, destChan chan []byte, ip, port string) {
 		}
 
 		fmt.Printf("new conn: %+v\n", conn)
-		// go outboundHandler(destChan, conn)
+		go outboundHandler(destChan, conn)
 		go inboundHandler(srcChan, conn)
 	}
 }
 
 func outboundHandler(destChan chan []byte, conn net.Conn) {
-	for range destChan {
-		if _, err := conn.Write(<-destChan); err != nil {
+	defer conn.Close()
+
+	w := bufio.NewWriter(conn)
+	for bytes := range destChan {
+		if _, err := w.Write(bytes); err != nil {
 			log.Fatal(err)
+			return
 		}
 	}
 }
 
 func inboundHandler(srcChan chan []byte, conn net.Conn) {
+	defer conn.Close()
+
 	r := bufio.NewReader(conn)
 	for {
 		bytes := make([]byte, 4096)
-		_, err := r.Read(bytes)
+		n, err := r.Read(bytes)
+
 		switch err {
 		case nil:
+			fmt.Printf("bytes read: %d\n", n)
+			srcChan <- bytes[:n]
 		case io.EOF:
 			fmt.Println("EOF", err)
-			// conn.Close()
-			// return
+			conn.Close()
+			return
 		default:
 			fmt.Println("ERROR", err)
 			conn.Close()
 			return
 		}
-		srcChan <- bytes
 	}
 }

@@ -16,26 +16,30 @@ func Dialer(srcChan, destChan chan []byte, protocol, ip, port string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	fmt.Printf("ip: %s, port: %s\n", ip, port)
 	conn, err := d.DialContext(ctx, protocol, fmt.Sprintf("%s:%s", ip, port))
 	if err != nil {
 		log.Fatalf("Failed to dial: %v", err)
 	}
-	defer conn.Close()
 
 	go outboundHandler(srcChan, conn)
-	// go inboundHandler(destChan, conn)
+	go inboundHandler(destChan, conn)
 }
 
 func outboundHandler(srcChan chan []byte, conn net.Conn) {
-	for range srcChan {
-		if _, err := conn.Write(<-srcChan); err != nil {
+	defer conn.Close()
+
+	w := bufio.NewWriter(conn)
+	for bytes := range srcChan {
+		if _, err := w.Write(bytes); err != nil {
 			log.Fatal(err)
+			return
 		}
 	}
 }
 
 func inboundHandler(destChan chan []byte, conn net.Conn) {
+	defer conn.Close()
+
 	r := bufio.NewReader(conn)
 	for {
 		bytes := make([]byte, 4096)

@@ -35,9 +35,6 @@ func (s *Stream) Start() {
 	case "tcp":
 		go listener.TCPListener(srcChan, destChan, s.SrcIP.String(), s.SrcPort)
 		go dialer.Dialer(srcChan, destChan, "tcp", s.DestIP.String(), s.DestPort)
-		// for elem := range bus {
-		// 	fmt.Println("Data: ", string(elem))
-		// }
 	default:
 		log.Fatal(fmt.Errorf("bad network protocol"))
 	}
