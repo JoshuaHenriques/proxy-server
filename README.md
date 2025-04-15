@@ -1,6 +1,6 @@
 # **Proxy Server**
 
-A multi-protocol proxy server for seamless TCP/UDP and HTTP/HTTPS traffic routing, offering **bidirectional proxy functionality** for both Layer 4 (TCP/UDP) and Layer 7 (HTTP/HTTPS) traffic in a lightweight solution.
+A multi-protocol proxy server enabling seamless routing of TCP/UDP and HTTP/HTTPS traffic, supporting both Layer 4 (transport) and Layer 7 (application) protocols. 
 
 _(Work in Progress)_
 
