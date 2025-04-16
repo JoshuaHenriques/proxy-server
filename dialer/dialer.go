@@ -17,7 +17,7 @@ func New(protocol, ip, port string) (*Dialer, error) {
 
 	conn, err := d.Dial(protocol, fmt.Sprintf("%s:%s", ip, port))
 	if err != nil {
-		return nil, fmt.Errorf("Failed to dial: %v", err)
+		return nil, fmt.Errorf("failed to dial: %v", err)
 	}
 	fmt.Printf("Dialer Conn: %v\n", conn)
 

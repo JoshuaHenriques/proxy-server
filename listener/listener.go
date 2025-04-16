@@ -8,15 +8,21 @@ import (
 )
 
 type Listener struct {
-	Conn     net.Conn
+	ConnChan chan *Conn
 	Protocol string
 	Port     string
-	Reader   *bufio.Reader
-	Writer   *bufio.Writer
+}
+
+type Conn struct {
+	Conn   net.Conn
+	Reader *bufio.Reader
+	Writer *bufio.Writer
 }
 
 func New(protocol, port string) (*Listener, error) {
 	listener := &Listener{Port: port, Protocol: protocol}
+	listener.ConnChan = make(chan *Conn)
+
 	if protocol != "udp" && protocol != "tcp" {
 		return nil, fmt.Errorf("bad protocol")
 	}
@@ -26,9 +32,9 @@ func New(protocol, port string) (*Listener, error) {
 func (l *Listener) Run() {
 	switch l.Protocol {
 	case "udp":
-		l.startUDPListener()
+		go l.startUDPListener()
 	case "tcp":
-		l.startTCPListener()
+		go l.startTCPListener()
 	}
 }
 
@@ -55,9 +61,11 @@ func (l *Listener) startTCPListener() {
 		w := bufio.NewWriter(conn)
 		r := bufio.NewReader(conn)
 
-		l.Conn = conn
-		l.Reader = r
-		l.Writer = w
+		l.ConnChan <- &Conn{Conn: conn, Reader: r, Writer: w}
+
+		// l.Conn = conn
+		// l.Reader = r
+		// l.Writer = w
 	}
 }
 
@@ -77,7 +85,10 @@ func (l *Listener) startUDPListener() {
 	w := bufio.NewWriter(conn)
 	r := bufio.NewReader(conn)
 
-	l.Conn = conn
-	l.Reader = r
-	l.Writer = w
+	l.ConnChan <- &Conn{Conn: conn, Reader: r, Writer: w}
+	close(l.ConnChan)
+
+	// l.Conn = conn
+	// l.Reader = r
+	// l.Writer = w
 }

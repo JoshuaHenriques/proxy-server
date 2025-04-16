@@ -16,6 +16,7 @@ type Stream struct {
 	DestIP   net.IP
 	DestPort string
 	Protocol string
+	Listener *listener.Listener
 }
 
 func New(srcIPRaw, destIPRaw, srcPort, destPort, protocol string) *Stream {
@@ -32,58 +33,73 @@ func (s *Stream) Start() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("Started UDP Listener\n")
+		fmt.Printf("Init UDP Listener\n")
+		s.Listener = l
 
-		d, err := dialer.New(s.Protocol, s.DestIP.String(), s.DestPort)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Printf("Started Dialer\n")
-
-		go startUDPStream(l, d)
+		s.run()
 	case "tcp":
 		l, err := listener.New(s.Protocol, s.SrcPort)
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("Started TCP Listener\n")
+		fmt.Printf("Init TCP Listener\n")
+		s.Listener = l
 
+	default:
+		log.Fatal(fmt.Errorf("bad network protocol"))
+	}
+
+	s.run()
+}
+
+func (s *Stream) run() {
+	s.Listener.Run()
+	for conn := range s.Listener.ConnChan {
 		d, err := dialer.New(s.Protocol, s.DestIP.String(), s.DestPort)
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("Started Dialer\n")
+		fmt.Printf("Init Dialer\n")
 
-		go startTCPStream(l, d)
-	default:
-		log.Fatal(fmt.Errorf("bad network protocol"))
+		switch s.Protocol {
+		case "udp":
+			go startUDPStream(conn, d)
+		case "tcp":
+			go startTCPStream(conn, d)
+		}
 	}
 }
 
-func startTCPStream(l *listener.Listener, d *dialer.Dialer) {
+func startTCPStream(l *listener.Conn, d *dialer.Dialer) {
 	defer l.Conn.Close()
 	defer d.Conn.Close()
+	defer fmt.Printf("TCP Stream (%v) Finished/Closed\n------------------------------------\n", l.Conn)
 
-	// l.Run()
+	fmt.Printf("TCP Stream (%v) Running\n", l.Conn)
 
-	fmt.Printf("TCP Stream Running\n")
+	// client <- server
 	go func() {
-		io.Copy(d.Writer, l.Reader)
-		d.Writer.Flush()
+		io.Copy(l.Writer, d.Reader)
+		l.Writer.Flush()
 	}()
-	io.Copy(l.Writer, d.Reader)
-	l.Writer.Flush()
+	// client -> server
+	io.Copy(d.Writer, l.Reader)
+	d.Writer.Flush()
 }
 
-func startUDPStream(l *listener.Listener, d *dialer.Dialer) {
+func startUDPStream(l *listener.Conn, d *dialer.Dialer) {
 	defer l.Conn.Close()
 	defer d.Conn.Close()
+	defer fmt.Printf("UDP Stream (%v) Finished/Closed\n------------------------------------\n", l.Conn)
 
-	fmt.Printf("UDP Stream Running\n")
+	fmt.Printf("UDP Stream (%v) Running\n", l.Conn)
+
+	// client <- server
 	go func() {
-		io.Copy(d.Writer, l.Reader)
-		d.Writer.Flush()
+		io.Copy(l.Writer, d.Reader)
+		l.Writer.Flush()
 	}()
-	io.Copy(l.Writer, d.Reader)
-	l.Writer.Flush()
+	// client -> server
+	io.Copy(d.Writer, l.Reader)
+	d.Writer.Flush()
 }
