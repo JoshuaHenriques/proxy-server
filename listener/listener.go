@@ -1,27 +1,20 @@
 package listener
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"net"
 )
 
 type Listener struct {
-	ConnChan chan *Conn
+	ConnChan chan net.Conn
 	Protocol string
 	Port     string
 }
 
-type Conn struct {
-	Conn   net.Conn
-	Reader *bufio.Reader
-	Writer *bufio.Writer
-}
-
 func New(protocol, port string) (*Listener, error) {
 	listener := &Listener{Port: port, Protocol: protocol}
-	listener.ConnChan = make(chan *Conn)
+	listener.ConnChan = make(chan net.Conn)
 
 	if protocol != "udp" && protocol != "tcp" {
 		return nil, fmt.Errorf("bad protocol")
@@ -58,14 +51,7 @@ func (l *Listener) startTCPListener() {
 		}
 		fmt.Printf("TCP Listener Conn: %v\n", conn)
 
-		w := bufio.NewWriter(conn)
-		r := bufio.NewReader(conn)
-
-		l.ConnChan <- &Conn{Conn: conn, Reader: r, Writer: w}
-
-		// l.Conn = conn
-		// l.Reader = r
-		// l.Writer = w
+		l.ConnChan <- conn.(*net.TCPConn)
 	}
 }
 
@@ -75,6 +61,7 @@ func (l *Listener) startUDPListener() {
 		log.Fatal(err)
 	}
 
+	// unconnected socket, use WriteToUDP, can't use bufio
 	conn, err := net.ListenUDP(l.Protocol, addr)
 	if err != nil {
 		log.Fatal(err)
@@ -82,13 +69,5 @@ func (l *Listener) startUDPListener() {
 	// defer conn.Close()
 	fmt.Printf("UDP Listener Conn: %v\n", conn)
 
-	w := bufio.NewWriter(conn)
-	r := bufio.NewReader(conn)
-
-	l.ConnChan <- &Conn{Conn: conn, Reader: r, Writer: w}
-	close(l.ConnChan)
-
-	// l.Conn = conn
-	// l.Reader = r
-	// l.Writer = w
+	l.ConnChan <- conn
 }

@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -11,34 +12,37 @@ import (
 )
 
 type Stream struct {
-	SrcIP    net.IP
-	SrcPort  string
-	DestIP   net.IP
-	DestPort string
-	Protocol string
-	Listener *listener.Listener
+	ClientIP   string
+	ClientPort string
+	ServerIP   string
+	ServerPort string
+	Protocol   string
+	Listener   *listener.Listener
 }
 
-func New(srcIPRaw, destIPRaw, srcPort, destPort, protocol string) *Stream {
-	srcIP := net.ParseIP(srcIPRaw)
-	destIP := net.ParseIP(destIPRaw)
-	stream := &Stream{SrcIP: srcIP, DestIP: destIP, SrcPort: srcPort, DestPort: destPort, Protocol: protocol}
+func New(clientIP, serverIP, clientPort, serverPort, protocol string) *Stream {
+	stream := &Stream{
+		ClientIP:   clientIP,
+		ClientPort: clientPort,
+		ServerIP:   serverIP,
+		ServerPort: serverPort,
+		Protocol:   protocol,
+	}
 	return stream
 }
 
 func (s *Stream) Start() {
 	switch s.Protocol {
 	case "udp":
-		l, err := listener.New(s.Protocol, s.SrcPort)
+		l, err := listener.New(s.Protocol, s.ClientPort)
 		if err != nil {
 			log.Fatal(err)
 		}
 		fmt.Printf("Init UDP Listener\n")
 		s.Listener = l
 
-		s.run()
 	case "tcp":
-		l, err := listener.New(s.Protocol, s.SrcPort)
+		l, err := listener.New(s.Protocol, s.ServerPort)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -54,8 +58,9 @@ func (s *Stream) Start() {
 
 func (s *Stream) run() {
 	s.Listener.Run()
+
 	for conn := range s.Listener.ConnChan {
-		d, err := dialer.New(s.Protocol, s.DestIP.String(), s.DestPort)
+		d, err := dialer.New(s.Protocol, s.ServerIP, s.ServerPort)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -63,43 +68,99 @@ func (s *Stream) run() {
 
 		switch s.Protocol {
 		case "udp":
-			go startUDPStream(conn, d)
+			lconn, ok := conn.(*net.UDPConn)
+			if !ok {
+				log.Fatal("not udpconn")
+			}
+
+			dconn, ok := d.(*net.UDPConn)
+			if !ok {
+				log.Fatal("not udpconn")
+			}
+
+			go s.startUDPStream(lconn, dconn)
+			close(s.Listener.ConnChan)
 		case "tcp":
-			go startTCPStream(conn, d)
+			lconn, ok := conn.(*net.TCPConn)
+			if !ok {
+				log.Fatal("not tcpconn")
+			}
+
+			dconn, ok := d.(*net.TCPConn)
+			if !ok {
+				log.Fatal("not tcpconn")
+			}
+
+			go s.startTCPStream(lconn, dconn)
 		}
 	}
 }
 
-func startTCPStream(l *listener.Conn, d *dialer.Dialer) {
-	defer l.Conn.Close()
-	defer d.Conn.Close()
-	defer fmt.Printf("TCP Stream (%v) Finished/Closed\n------------------------------------\n", l.Conn)
+func (s *Stream) startTCPStream(lconn, dconn *net.TCPConn) {
+	defer lconn.Close()
+	defer dconn.Close()
+	defer fmt.Printf("TCP Stream (%v) Finished/Closed\n------------------------------------\n", lconn)
 
-	fmt.Printf("TCP Stream (%v) Running\n", l.Conn)
+	fmt.Printf("TCP Stream (%v) Running\n", lconn)
+
+	lw := bufio.NewWriter(lconn)
+	lr := bufio.NewReader(lconn)
+
+	dw := bufio.NewWriter(dconn)
+	dr := bufio.NewReader(dconn)
 
 	// client <- server
 	go func() {
-		io.Copy(l.Writer, d.Reader)
-		l.Writer.Flush()
+		io.Copy(lw, dr)
+		lw.Flush()
 	}()
 	// client -> server
-	io.Copy(d.Writer, l.Reader)
-	d.Writer.Flush()
+	io.Copy(dw, lr)
+	dw.Flush()
 }
 
-func startUDPStream(l *listener.Conn, d *dialer.Dialer) {
-	defer l.Conn.Close()
-	defer d.Conn.Close()
-	defer fmt.Printf("UDP Stream (%v) Finished/Closed\n------------------------------------\n", l.Conn)
+func (s *Stream) startUDPStream(lconn, dconn *net.UDPConn) {
+	defer lconn.Close()
+	defer dconn.Close()
+	defer fmt.Printf("UDP Stream (%v) Finished/Closed\n------------------------------------\n", lconn)
 
-	fmt.Printf("UDP Stream (%v) Running\n", l.Conn)
+	fmt.Printf("UDP Stream (%v) Running\n", lconn)
+
+	var clientAddr *net.UDPAddr
+	buf := make([]byte, 65507)
+
+	// multi client
+	// keep track of all clientaddr and send
 
 	// client <- server
 	go func() {
-		io.Copy(l.Writer, d.Reader)
-		l.Writer.Flush()
+		for {
+			n, _, err := dconn.ReadFromUDP(buf)
+			if err != nil {
+				fmt.Printf("Connection Closed: %v\n", dconn)
+				return
+			}
+			// fmt.Printf("%s\n", string(buf[:n]))
+			_, err = lconn.WriteToUDP(buf[:n], clientAddr)
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
 	}()
+
 	// client -> server
-	io.Copy(d.Writer, l.Reader)
-	d.Writer.Flush()
+	for {
+		n, addr, err := lconn.ReadFromUDP(buf)
+		if err != nil {
+			fmt.Printf("Connection Closed: %v\n", lconn)
+			return
+		}
+
+		clientAddr = addr
+
+		_, err = dconn.Write(buf[:n])
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
 }
