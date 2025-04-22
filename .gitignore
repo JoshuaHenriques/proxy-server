@@ -9,6 +9,9 @@ bin/
 *.so
 *.dylib
 
+# todo file
+proxy-todo.md
+
 # Test binary, built with `go test -c`
 *.test
 
