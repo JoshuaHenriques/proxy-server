@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 
-	"github.com/JoshuaHenriques/proxy-server/dialer"
 	"github.com/JoshuaHenriques/proxy-server/listener"
 )
 
@@ -17,7 +16,6 @@ type Stream struct {
 	ServerIP   string
 	ServerPort string
 	Protocol   string
-	Listener   *listener.Listener
 }
 
 func New(clientIP, serverIP, clientPort, serverPort, protocol string) *Stream {
@@ -32,71 +30,35 @@ func New(clientIP, serverIP, clientPort, serverPort, protocol string) *Stream {
 }
 
 func (s *Stream) Start() {
-	switch s.Protocol {
-	case "udp":
-		l, err := listener.New(s.Protocol, s.ClientPort)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Printf("Init UDP Listener\n")
-		s.Listener = l
-
-	case "tcp":
-		l, err := listener.New(s.Protocol, s.ServerPort)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Printf("Init TCP Listener\n")
-		s.Listener = l
-
-	default:
-		log.Fatal(fmt.Errorf("bad network protocol"))
+	l, err := listener.New(s.Protocol, s.ClientPort)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	s.run()
-}
-
-func (s *Stream) run() {
-	s.Listener.Run()
-
-	for conn := range s.Listener.ConnChan {
-		d, err := dialer.New(s.Protocol, s.ServerIP, s.ServerPort)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Printf("Init Dialer\n")
-
-		switch s.Protocol {
-		case "udp":
-			lconn, ok := conn.(*net.UDPConn)
-			if !ok {
-				log.Fatal("not udpconn")
+	switch l := l.(type) {
+	case *listener.UDPListener:
+		l.Run()
+		go s.handleUDPStream(l.Conn())
+	case *listener.TCPListener:
+		go l.Run()
+		for lconn := range l.ConnChan() {
+			var d net.Dialer
+			c, err := d.Dial(s.Protocol, fmt.Sprintf("%s:%s", s.ServerIP, s.ServerPort))
+			if err != nil {
+				log.Fatalf("failed to dial: %v\n", err)
 			}
 
-			dconn, ok := d.(*net.UDPConn)
-			if !ok {
-				log.Fatal("not udpconn")
-			}
-
-			go s.startUDPStream(lconn, dconn)
-			close(s.Listener.ConnChan)
-		case "tcp":
-			lconn, ok := conn.(*net.TCPConn)
+			dconn, ok := c.(*net.TCPConn)
 			if !ok {
 				log.Fatal("not tcpconn")
 			}
 
-			dconn, ok := d.(*net.TCPConn)
-			if !ok {
-				log.Fatal("not tcpconn")
-			}
-
-			go s.startTCPStream(lconn, dconn)
+			go s.handleTCPStream(lconn, dconn)
 		}
 	}
 }
 
-func (s *Stream) startTCPStream(lconn, dconn *net.TCPConn) {
+func (s *Stream) handleTCPStream(lconn, dconn *net.TCPConn) {
 	defer lconn.Close()
 	defer dconn.Close()
 	defer fmt.Printf("TCP Stream (%v) Finished/Closed\n------------------------------------\n", lconn)
@@ -119,48 +81,75 @@ func (s *Stream) startTCPStream(lconn, dconn *net.TCPConn) {
 	dw.Flush()
 }
 
-func (s *Stream) startUDPStream(lconn, dconn *net.UDPConn) {
+type Packet struct {
+	Data []byte
+	Addr *net.UDPAddr
+}
+
+func (s *Stream) handleUDPStream(lconn *net.UDPConn) {
 	defer lconn.Close()
-	defer dconn.Close()
 	defer fmt.Printf("UDP Stream (%v) Finished/Closed\n------------------------------------\n", lconn)
 
 	fmt.Printf("UDP Stream (%v) Running\n", lconn)
 
-	var clientAddr *net.UDPAddr
-	buf := make([]byte, 65507)
+	clientRecv := make(chan Packet)
 
-	// multi client
-	// keep track of all clientaddr and send
-
-	// client <- server
 	go func() {
-		for {
-			n, _, err := dconn.ReadFromUDP(buf)
-			if err != nil {
-				fmt.Printf("Connection Closed: %v\n", dconn)
-				return
-			}
-			// fmt.Printf("%s\n", string(buf[:n]))
-			_, err = lconn.WriteToUDP(buf[:n], clientAddr)
+		for packet := range clientRecv {
+			_, err := lconn.WriteToUDP(packet.Data, packet.Addr)
 			if err != nil {
 				fmt.Println(err)
 			}
 		}
 	}()
 
-	// client -> server
+	clientMap := make(map[string]chan Packet)
+	buf := make([]byte, 65507)
+
 	for {
-		n, addr, err := lconn.ReadFromUDP(buf)
+		n, srcAddr, err := lconn.ReadFromUDP(buf)
 		if err != nil {
 			fmt.Printf("Connection Closed: %v\n", lconn)
 			return
 		}
 
-		clientAddr = addr
+		clientSend, ok := clientMap[srcAddr.String()]
+		if ok {
+			clientSend <- Packet{Data: buf[:n], Addr: srcAddr}
+		} else {
+			fmt.Printf("srcAddr: %s\n", srcAddr)
+			sender := make(chan Packet)
+			clientMap[srcAddr.String()] = sender
 
-		_, err = dconn.Write(buf[:n])
-		if err != nil {
-			fmt.Println(err)
+			go func() {
+				var d net.Dialer
+				conn, err := d.Dial(s.Protocol, fmt.Sprintf("%s:%s", s.ServerIP, s.ServerPort))
+				if err != nil {
+					fmt.Printf("failed to dial: %s", err)
+				}
+				dconn, ok := conn.(*net.UDPConn)
+				if !ok {
+					fmt.Printf("failed to dial: %s", err)
+				}
+
+				go func() {
+					for {
+						n, _, err := dconn.ReadFromUDP(buf)
+						if err != nil {
+							fmt.Printf("Connection Closed: %v\n", dconn)
+							return
+						}
+						clientRecv <- Packet{Data: buf[:n], Addr: srcAddr}
+					}
+				}()
+
+				for req := range sender {
+					_, err = dconn.Write(req.Data)
+					if err != nil {
+						fmt.Println(err)
+					}
+				}
+			}()
 		}
 	}
 }
