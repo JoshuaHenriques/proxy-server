@@ -4,7 +4,6 @@ import (
 	"fmt"
 )
 
-// ConnChan chan net.Conn
 type Listener interface {
 	Run()
 }
