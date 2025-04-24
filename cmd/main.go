@@ -5,15 +5,21 @@ import (
 )
 
 func main() {
-	// tcpStream := stream.New("127.0.0.1", "192.168.2.18", "7777", "7777", "tcp")
-	// tcpStream.Start()
+	tcpStream := stream.New(
+		"127.0.0.1",
+		"192.168.2.18",
+		"7777",
+		"7777",
+		"tcp")
+	go tcpStream.Start()
+
 	udpStream := stream.New(
 		"127.0.0.1",
 		"192.168.2.18",
 		"7777",
 		"7777",
 		"udp")
-	udpStream.Start()
+	go udpStream.Start()
 
 	select {}
 }

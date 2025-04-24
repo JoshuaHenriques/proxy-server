@@ -2,6 +2,7 @@ package listener
 
 import (
 	"fmt"
+	"net"
 )
 
 type Listener interface {
@@ -18,7 +19,10 @@ func New(protocol, port string) (Listener, error) {
 		l := &UDPListener{port: port}
 		return l, nil
 	case "tcp":
-		l := &TCPListener{port: port}
+		l := &TCPListener{
+			port:     port,
+			connChan: make(chan *net.TCPConn),
+		}
 		return l, nil
 	default:
 		return nil, fmt.Errorf("bad protocol")
