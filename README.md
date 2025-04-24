@@ -1,4 +1,4 @@
-# Multi-Layer Reverse Proxy Server
+# Reverse Proxy
 
 ## Core Functionality  
 A high-performance reverse proxy operating at transport (Layer 4) and application (Layer 7) layers, designed to securely manage inbound client-to-server traffic across multiple protocols with optional forward proxy capabilities.
