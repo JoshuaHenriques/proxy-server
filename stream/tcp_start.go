@@ -1,7 +1,6 @@
 package stream
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -50,18 +49,8 @@ func (s *Stream) handleTCPStream(lconn, dconn *net.TCPConn) {
 
 	fmt.Printf("TCP Stream (%v) Running\n", lconn)
 
-	lw := bufio.NewWriter(lconn)
-	lr := bufio.NewReader(lconn)
-
-	dw := bufio.NewWriter(dconn)
-	dr := bufio.NewReader(dconn)
-
 	// client <- server
-	go func() {
-		io.Copy(lw, dr)
-		lw.Flush()
-	}()
+	go io.Copy(lconn, dconn)
 	// client -> server
-	io.Copy(dw, lr)
-	dw.Flush()
+	io.Copy(dconn, lconn)
 }
