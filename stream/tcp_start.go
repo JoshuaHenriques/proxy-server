@@ -6,18 +6,28 @@ import (
 	"io"
 	"log"
 	"net"
-
-	"github.com/JoshuaHenriques/proxy-server/listener"
 )
 
 func (s *Stream) StartTCP() {
-	l, err := listener.New(s.Protocol, s.ClientPort)
+	addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%s", s.ClientPort))
 	if err != nil {
 		log.Fatal(err)
 	}
-	tcpL := l.(*listener.TCPListener)
-	go tcpL.Run()
-	for lconn := range tcpL.ConnChan() {
+
+	tcpL, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// l.SetDeadline(time.Now().Add(5 * time.Second))
+
+	for {
+		conn, err := tcpL.Accept()
+		lconn := conn.(*net.TCPConn)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("TCP Listener Conn: %v\n", lconn)
+
 		var d net.Dialer
 		c, err := d.Dial(s.Protocol, fmt.Sprintf("%s:%s", s.ServerIP, s.ServerPort))
 		if err != nil {
@@ -54,9 +64,4 @@ func (s *Stream) handleTCPStream(lconn, dconn *net.TCPConn) {
 	// client -> server
 	io.Copy(dw, lr)
 	dw.Flush()
-}
-
-type Packet struct {
-	Data []byte
-	Addr *net.UDPAddr
 }

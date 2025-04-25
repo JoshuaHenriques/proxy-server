@@ -4,18 +4,26 @@ import (
 	"fmt"
 	"log"
 	"net"
-
-	"github.com/JoshuaHenriques/proxy-server/listener"
 )
 
+type Packet struct {
+	Data []byte
+	Addr *net.UDPAddr
+}
+
 func (s *Stream) StartUDP() {
-	l, err := listener.New(s.Protocol, s.ClientPort)
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%s", s.ClientPort))
 	if err != nil {
 		log.Fatal(err)
 	}
-	udpL := l.(*listener.UDPListener)
-	udpL.Run()
-	go s.handleUDPStream(udpL.Conn())
+
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("UDP Listener Conn: %v\n", conn)
+
+	go s.handleUDPStream(conn)
 }
 
 func (s *Stream) handleUDPStream(lconn *net.UDPConn) {
