@@ -9,6 +9,12 @@ bin/
 *.so
 *.dylib
 
+# certs
+*.key
+*.crt
+*.csr
+*.pem
+
 # todo file
 proxy-todo.md
 

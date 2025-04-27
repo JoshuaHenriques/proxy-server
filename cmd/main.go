@@ -1,25 +1,36 @@
 package main
 
 import (
+	"sync"
+
 	"github.com/JoshuaHenriques/proxy-server/stream"
 )
 
 func main() {
-	tcpStream := stream.New(
-		"127.0.0.1",
-		"192.168.2.18",
-		"7777",
-		"7777",
-		"tcp")
-	go tcpStream.Start()
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-	udpStream := stream.New(
-		"127.0.0.1",
-		"192.168.2.18",
-		"7777",
-		"7777",
-		"udp")
-	go udpStream.Start()
+	go func() {
+		tcpStream := stream.New(
+			"127.0.0.1",
+			"192.168.2.18",
+			"7777",
+			"7777",
+			"tcp")
+		tcpStream.Start()
+		wg.Done()
+	}()
+
+	go func() {
+		udpStream := stream.New(
+			"127.0.0.1",
+			"192.168.2.18",
+			"7777",
+			"7777",
+			"udp")
+		udpStream.Start()
+		wg.Done()
+	}()
 
 	// httpProxy := httpproxy.New(
 	// 	"127.0.0.1",
@@ -29,5 +40,6 @@ func main() {
 	// )
 	// go httpProxy.Start()
 
-	select {}
+	// select {}
+	wg.Wait()
 }
