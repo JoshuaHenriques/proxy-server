@@ -3,22 +3,22 @@ package stream
 import "log"
 
 type Stream struct {
-	ClientIP, ClientPort, ServerIP, ServerPort, Protocol string
+	clientIP, clientPort, serverIP, serverPort, protocol string
 }
 
 func New(clientIP, serverIP, clientPort, serverPort, protocol string) *Stream {
 	stream := &Stream{
-		ClientIP:   clientIP,
-		ClientPort: clientPort,
-		ServerIP:   serverIP,
-		ServerPort: serverPort,
-		Protocol:   protocol,
+		clientIP:   clientIP,
+		clientPort: clientPort,
+		serverIP:   serverIP,
+		serverPort: serverPort,
+		protocol:   protocol,
 	}
 	return stream
 }
 
 func (s *Stream) Start() {
-	switch s.Protocol {
+	switch s.protocol {
 	case "udp":
 		s.StartUDP()
 	case "tcp":

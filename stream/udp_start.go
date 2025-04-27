@@ -7,12 +7,12 @@ import (
 )
 
 type Packet struct {
-	Data []byte
-	Addr *net.UDPAddr
+	data []byte
+	addr *net.UDPAddr
 }
 
 func (s *Stream) StartUDP() {
-	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%s", s.ClientPort))
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%s", s.clientPort))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func (s *Stream) handleUDPStream(lconn *net.UDPConn) {
 
 	go func() {
 		for packet := range clientRecv {
-			_, err := lconn.WriteToUDP(packet.Data, packet.Addr)
+			_, err := lconn.WriteToUDP(packet.data, packet.addr)
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -55,7 +55,7 @@ func (s *Stream) handleUDPStream(lconn *net.UDPConn) {
 
 		clientSend, ok := clientMap[srcAddr.String()]
 		if ok {
-			clientSend <- Packet{Data: buf[:n], Addr: srcAddr}
+			clientSend <- Packet{data: buf[:n], addr: srcAddr}
 		} else {
 			fmt.Printf("srcAddr: %s\n", srcAddr)
 			sender := make(chan Packet)
@@ -63,7 +63,7 @@ func (s *Stream) handleUDPStream(lconn *net.UDPConn) {
 
 			go func() {
 				var d net.Dialer
-				conn, err := d.Dial(s.Protocol, fmt.Sprintf("%s:%s", s.ServerIP, s.ServerPort))
+				conn, err := d.Dial(s.protocol, fmt.Sprintf("%s:%s", s.serverIP, s.serverPort))
 				if err != nil {
 					fmt.Printf("failed to dial: %s", err)
 				}
@@ -79,12 +79,12 @@ func (s *Stream) handleUDPStream(lconn *net.UDPConn) {
 							fmt.Printf("Connection Closed: %v\n", dconn)
 							return
 						}
-						clientRecv <- Packet{Data: buf[:n], Addr: srcAddr}
+						clientRecv <- Packet{data: buf[:n], addr: srcAddr}
 					}
 				}()
 
 				for req := range sender {
-					_, err = dconn.Write(req.Data)
+					_, err = dconn.Write(req.data)
 					if err != nil {
 						fmt.Println(err)
 					}

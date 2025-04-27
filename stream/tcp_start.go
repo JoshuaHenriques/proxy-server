@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Stream) StartTCP() {
-	addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%s", s.ClientPort))
+	addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%s", s.clientPort))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func (s *Stream) StartTCP() {
 		fmt.Printf("TCP Listener Conn: %v\n", lconn)
 
 		var d net.Dialer
-		c, err := d.Dial(s.Protocol, fmt.Sprintf("%s:%s", s.ServerIP, s.ServerPort))
+		c, err := d.Dial(s.protocol, fmt.Sprintf("%s:%s", s.serverIP, s.serverPort))
 		if err != nil {
 			log.Fatalf("failed to dial: %v\n", err)
 		}
