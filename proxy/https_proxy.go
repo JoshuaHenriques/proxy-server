@@ -1,4 +1,4 @@
-package httpproxy
+package proxy
 
 import (
 	"crypto/tls"
@@ -10,25 +10,7 @@ import (
 	"net/url"
 )
 
-type TLSProxy struct {
-	clientIP, clientPort, serverIP, serverPort, cert, key string
-	reverseProxy                                          *httputil.ReverseProxy
-}
-
-func NewTLSProxy(clientIP, serverIP, clientPort, serverPort, cert, key string) *TLSProxy {
-	proxy := &TLSProxy{
-		clientIP:   clientIP,
-		clientPort: clientPort,
-		serverIP:   serverIP,
-		serverPort: serverPort,
-		cert:       cert,
-		key:        key,
-	}
-
-	return proxy
-}
-
-func (p *TLSProxy) Start() error {
+func (p *Proxy) StartHTTPS() error {
 	addr, err := net.ResolveTCPAddr(
 		"tcp",
 		fmt.Sprintf(":%s", p.clientPort))
@@ -56,7 +38,7 @@ func (p *TLSProxy) Start() error {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", p.handleProxy)
+	mux.HandleFunc("/", p.handleTLSProxy)
 
 	server := &http.Server{
 		Handler:   mux,
@@ -79,6 +61,6 @@ func (p *TLSProxy) Start() error {
 	return server.ServeTLS(tcpL, p.cert, p.key)
 }
 
-func (p *TLSProxy) handleProxy(w http.ResponseWriter, req *http.Request) {
+func (p *Proxy) handleTLSProxy(w http.ResponseWriter, req *http.Request) {
 	p.reverseProxy.ServeHTTP(w, req)
 }

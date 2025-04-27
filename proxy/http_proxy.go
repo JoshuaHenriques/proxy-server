@@ -1,4 +1,4 @@
-package httpproxy
+package proxy
 
 import (
 	"fmt"
@@ -9,23 +9,7 @@ import (
 	"net/url"
 )
 
-type Proxy struct {
-	clientIP, clientPort, serverIP, serverPort string
-	reverseProxy                               *httputil.ReverseProxy
-}
-
-func NewProxy(clientIP, serverIP, clientPort, serverPort string) *Proxy {
-	proxy := &Proxy{
-		clientIP:   clientIP,
-		clientPort: clientPort,
-		serverIP:   serverIP,
-		serverPort: serverPort,
-	}
-
-	return proxy
-}
-
-func (p *Proxy) Start() error {
+func (p *Proxy) StartHTTP() error {
 	addr, err := net.ResolveTCPAddr(
 		"tcp",
 		fmt.Sprintf(":%s", p.clientPort))
